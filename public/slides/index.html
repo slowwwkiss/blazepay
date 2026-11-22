@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BlazePay — BCH Blaze 2026</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b3d2e; color: #14201b; }
+  .deck { max-width: 960px; margin: 0 auto; padding: 24px 16px 60px; }
+  .slide {
+    background: #fff; border-radius: 18px; padding: 48px 52px; margin: 28px 0;
+    min-height: 420px; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  }
+  .slide h1 { font-size: 3em; margin: 0 0 .2em; letter-spacing: -.02em; }
+  .slide h1 .bolt { color: #0ac18e; }
+  .slide h2 { font-size: 2em; margin: 0 0 .4em; color: #0b3d2e; }
+  .slide p, .slide li { font-size: 1.25em; line-height: 1.55; }
+  .slide ul { padding-left: 1.2em; }
+  .slide li { margin: .45em 0; }
+  .kicker { color: #0ac18e; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: .95em; }
+  .sub { color: #5c6b64; font-size: 1.3em; }
+  .big { font-size: 1.6em; font-weight: 700; }
+  code { background: #eef6f2; padding: 2px 8px; border-radius: 6px; font-size: .82em; word-break: break-all; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card { background: #f4f8f5; border-radius: 12px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 .3em; }
+  .card p { font-size: 1.1em; margin: 0; }
+  .flow { display: flex; gap: 12px; align-items: stretch; margin: 20px 0; }
+  .flow div { flex: 1; background: #e4f9f0; border-radius: 12px; padding: 16px; text-align: center; font-weight: 700; }
+  .flow span { display: block; font-size: 2em; }
+  .nav { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.95); border-radius: 999px; padding: 8px 16px; font-size: .95em; box-shadow: 0 4px 18px rgba(0,0,0,.3); }
+  .nav b { color: #0b3d2e; }
+  @media (max-width: 640px) { .slide { padding: 28px 22px; min-height: 0; } .slide h1 { font-size: 2.1em; } .slide p, .slide li { font-size: 1.05em; } .cols { grid-template-columns: 1fr; } .flow { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <section class="slide">
+    <p class="kicker">BCH Blaze 2026 · Mainnet Track</p>
+    <h1>BlazePay<span class="bolt">⚡</span></h1>
+    <p class="sub">Send Bitcoin Cash with a link.</p>
+    <p>No account. No backend. No custody. The money moves on-chain — the link is just a URL.</p>
+    <p class="big">Create a link → share it → get paid in BCH.</p>
+  </section>
+
+  <section class="slide">
+    <p class="kicker">Problem</p>
+    <h2>Getting paid in crypto is still too hard</h2>
+    <ul>
+      <li>To receive BCH today you must explain wallets, addresses, and copy-paste a 42-character string — and hope nothing gets mistyped.</li>
+      <li>Payment apps solve this, but they are custodial: they hold the money, take a cut, and need an account.</li>
+      <li>Small sellers, streamers, and fundraisers need the simplest possible thing: <b>a link they can paste anywhere</b>.</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <p class="kicker">Solution</p>
+    <h2>A payment link, not a payment app</h2>
+    <div class="flow">
+      <div><span>1️⃣</span>Create<br>amount + message</div>
+      <div><span>🔗</span>Share<br>link + QR code</div>
+      <div><span>💸</span>Get paid<br>on-chain, verified</div>
+    </div>
+    <ul>
+      <li>One page. Fill in amount + message, get a shareable link and QR code.</li>
+      <li>Opening the link shows exactly what you pay, to whom, and why.</li>
+      <li>The message rides on-chain as OP_RETURN — the payment itself carries the receipt.</li>
+      <li>A live feed shows the latest payments to the recipient, read straight from the chain.</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <p class="kicker">Demo — 2 minutes</p>
+    <h2>Try it right now, for free</h2>
+    <ol>
+      <li><b>Testnet first (free):</b> open the demo, press <i>Get free testnet BCH</i> — the app makes a throwaway test wallet and funds it from the faucet.</li>
+      <li><b>Create a link:</b> amount 0.001 tBCH + a message → copy the link or scan the QR.</li>
+      <li><b>Pay it:</b> open the link, press <i>Pay now</i> — a real testnet transaction, with a txid and explorer link.</li>
+      <li><b>Mainnet:</b> flip the toggle, scan the WizardConnect QR with Paytaca / Selene / Cashonize, sign in your wallet. Same code, real BCH.</li>
+    </ol>
+    <p class="sub">Demo: <code>https://slowwwkiss.github.io/blazepay/</code> &nbsp;·&nbsp; Code: <code>github.com/slowwwkiss/blazepay</code></p>
+  </section>
+
+  <section class="slide">
+    <p class="kicker">Technology</p>
+    <h2>Built on BCH-native tooling</h2>
+    <div class="cols">
+      <div class="card"><h3>mainnet-js v3</h3><p>Wallets, transaction building, Electrum reads (UTXOs, balances, history). One code path for testnet and mainnet — only the network flips.</p></div>
+      <div class="card"><h3>WizardConnect</h3><p>QR handshake over an encrypted Nostr relay. The wallet shares its xpub; BlazePay derives the address and requests a signature. Keys never leave the wallet.</p></div>
+      <div class="card"><h3>OP_RETURN memo</h3><p>Every payment can carry a message on-chain — the payment and its purpose are one transaction.</p></div>
+      <div class="card"><h3>CashTokens</h3><p>The project address is token-aware; EMBER2026 donations fund Community Choice voting.</p></div>
+    </div>
+    <p>Static site, zero backend, zero custody. Hosting: GitHub Pages (free).</p>
+  </section>
+
+  <section class="slide">
+    <p class="kicker">Why BCH</p>
+    <h2>Why this only works on Bitcoin Cash</h2>
+    <ul>
+      <li><b>Fees are sub-cent</b> — a payment link for a coffee makes sense; on fee-heavy chains it does not.</li>
+      <li><b>Fast, reliable confirmation</b> — the payer sees the receipt in seconds, not after a queue.</li>
+      <li><b>OP_RETURN + CashTokens are native</b> — memos and token donations need no smart contract.</li>
+      <li><b>UTXO + Electrum</b> — balances and payment history are readable by any client, no indexer or API key.</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <p class="kicker">Business &amp; next steps</p>
+    <h2>From demo to a public good</h2>
+    <ul>
+      <li><b>Who pays:</b> nobody has to. The tool is free; the market is every small seller, creator, and fundraiser who wants BCH without an app.</li>
+      <li><b>Path to revenue (optional):</b> an optional 0.1% convenience output, off by default, for hosted/white-label versions.</li>
+      <li><b>Next:</b> CashTokens tipping (pay in any token), recurring links, and a no-code embed for shops.</li>
+    </ul>
+    <p class="big">Thank you — try the live demo and pay the link. ⚡</p>
+    <p class="sub">BlazePay · BCH Blaze 2026 · github.com/slowwwkiss/blazepay</p>
+  </section>
+
+</div>
+<div class="nav">Use <b>←</b> <b>→</b> or scroll · <b id="pg">1 / 7</b></div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let i = 0;
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('pg').textContent = (i + 1) + ' / ' + slides.length;
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') go(i + 1);
+    if (e.key === 'ArrowLeft') go(i - 1);
+  });
+  document.querySelectorAll('.slide').forEach((s, idx) => s.addEventListener('click', () => { i = idx; go(i); }));
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) {
+      i = slides.indexOf(e.target);
+      document.getElementById('pg').textContent = (i + 1) + ' / ' + slides.length;
+    }
+  }, { threshold: 0.5 });
+  slides.forEach((s) => io.observe(s));
+</script>
+</body>
+</html>

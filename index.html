@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlazePay — Send BCH with a link</title>
+  <meta name="description" content="BlazePay: create a BCH payment link, share it, get paid on-chain. Built for BCH Blaze 2026, Mainnet Track." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230AC18E'/%3E%3Ctext x='16' y='23' font-size='18' font-family='Arial' font-weight='bold' text-anchor='middle' fill='white'%3EB%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <!-- Required hackathon banner: presentation + source + CashTokens donation address -->
+    <header class="banner" id="top-banner">
+      <div class="banner-inner">
+        <span class="banner-badge">BCH BLAZE 2026 &middot; Mainnet Track</span>
+        <nav class="banner-links">
+          <a id="link-slides" class="banner-link" href="./slides/" target="_blank" rel="noopener">Presentation</a>
+          <a id="link-repo" class="banner-link" href="https://github.com/slowwwkiss/blazepay" target="_blank" rel="noopener">Source code (GitHub)</a>
+          <button id="btn-donate" class="banner-link banner-donate" type="button" title="Copy the CashTokens address for EMBER2026 donations">Donate EMBER2026</button>
+        </nav>
+      </div>
+      <div class="banner-sub" id="donate-line">
+        <span>Community Choice voting — donate EMBER2026 CashTokens to:</span>
+        <code id="donate-addr">bitcoincash:zppall5d96fdw0ecrpjstqlqv4j6gprlfg5apphgup</code>
+        <button id="btn-copy-donate" class="mini-btn" type="button">Copy</button>
+        <a class="mini-link" href="https://blockchair.com/bitcoin-cash/address/bitcoincash:zppall5d96fdw0ecrpjstqlqv4j6gprlfg5apphgup" target="_blank" rel="noopener">view address</a>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <h1>BlazePay</h1>
+        <p class="tagline">Send Bitcoin Cash with a link. No account. No backend. The money moves on-chain.</p>
+        <ol class="steps">
+          <li><b>1.</b> Create a payment link — amount + message, get a link &amp; QR.</li>
+          <li><b>2.</b> Open the link — connect your BCH wallet and pay.</li>
+          <li><b>3.</b> Done — the payment shows up below, verified on-chain.</li>
+        </ol>
+        <p class="hint">Judges: start on <b>Testnet</b> (free play money, one click) — then flip to <b>Mainnet</b> and pay for real with your own wallet via WizardConnect.</p>
+      </section>
+
+      <section class="card">
+        <div class="row between">
+          <h2>Network</h2>
+          <div class="toggle" role="group" aria-label="Network">
+            <button id="net-testnet" class="toggle-btn active" type="button">Testnet (free)</button>
+            <button id="net-mainnet" class="toggle-btn" type="button">Mainnet (real BCH)</button>
+          </div>
+        </div>
+        <p class="muted" id="net-note">Testnet: the app creates a throwaway test wallet in your browser and funds it free from the faucet. Nothing real moves.</p>
+      </section>
+
+      <section class="card" id="create-card">
+        <h2>Create a payment link</h2>
+        <form id="create-form">
+          <label>Amount (BCH)
+            <input id="in-amount" type="number" min="0.00001" step="0.00001" value="0.001" required />
+          </label>
+          <label>Message / memo <span class="muted">(goes on-chain as OP_RETURN)</span>
+            <input id="in-memo" type="text" maxlength="180" placeholder="e.g. Coffee for the demo" value="BlazePay demo payment" />
+          </label>
+          <label>Recipient (cashaddr)
+            <input id="in-recipient" type="text" spellcheck="false" value="bitcoincash:qppall5d96fdw0ecrpjstqlqv4j6gprlfgnhjlewrj" required />
+          </label>
+          <button class="btn primary" type="submit">Generate payment link</button>
+        </form>
+        <div id="link-result" class="hidden">
+          <label>Your payment link
+            <input id="out-link" type="text" readonly onclick="this.select()" />
+          </label>
+          <div class="row gap">
+            <button id="btn-copy-link" class="btn" type="button">Copy link</button>
+            <a id="btn-open-link" class="btn" href="#" target="_blank" rel="noopener">Open pay link</a>
+          </div>
+          <div class="qr-wrap"><img id="qr-img" alt="QR code for the payment link" /><p class="muted">Scan to open the pay page on your phone.</p></div>
+        </div>
+      </section>
+
+      <section class="card hidden" id="pay-card">
+        <h2>Pay this link</h2>
+        <dl class="pay-details">
+          <div><dt>Amount</dt><dd id="pay-amount">—</dd></div>
+          <div><dt>Message</dt><dd id="pay-memo">—</dd></div>
+          <div><dt>Recipient</dt><dd><code id="pay-recipient">—</code></dd></div>
+          <div><dt>Network</dt><dd id="pay-network">—</dd></div>
+        </dl>
+
+        <!-- Testnet wallet panel -->
+        <div id="panel-testnet" class="wallet-panel">
+          <h3>Your test wallet (in-browser)</h3>
+          <p class="muted">A throwaway testnet wallet lives only in this browser. It never touches real BCH.</p>
+          <p>Address: <code id="tw-addr">…</code></p>
+          <p>Balance: <b id="tw-balance">…</b></p>
+          <div class="row gap">
+            <button id="btn-faucet" class="btn" type="button">Get free testnet BCH</button>
+            <button id="btn-pay-testnet" class="btn primary" type="button">Pay now</button>
+          </div>
+          <p class="muted small">Faucet trouble? Any BCH testnet faucet works — send tBCH to the address above. Fallback: <a href="https://testnet-faucet.bitcoin.com" target="_blank" rel="noopener">testnet-faucet.bitcoin.com</a></p>
+        </div>
+
+        <!-- Mainnet WizardConnect panel -->
+        <div id="panel-mainnet" class="wallet-panel hidden">
+          <h3>Connect your BCH wallet — WizardConnect</h3>
+          <p class="muted">Scan the QR with <b>Paytaca</b>, <b>Selene</b> or <b>Cashonize</b>. Your wallet signs the transaction — BlazePay never sees your keys.</p>
+          <div id="wc-start"><button id="btn-wc-connect" class="btn primary" type="button">Connect wallet (show QR)</button></div>
+          <div id="wc-qr" class="hidden">
+            <img id="wc-qr-img" alt="WizardConnect QR code — scan with your BCH wallet" />
+            <p class="muted">Waiting for wallet… scan the code above.</p>
+            <p class="mono small" id="wc-uri"></p>
+          </div>
+          <div id="wc-connected" class="hidden">
+            <p>Connected: <b id="wc-wallet-name">wallet</b></p>
+            <p>Address: <code id="wc-addr">…</code></p>
+            <p>Balance: <b id="wc-balance">…</b></p>
+            <div class="row gap">
+              <button id="btn-pay-mainnet" class="btn primary" type="button">Pay now (sign in wallet)</button>
+              <button id="btn-wc-disconnect" class="btn" type="button">Disconnect</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="pay-status" class="status hidden"></div>
+
+        <div id="receipt" class="receipt hidden">
+          <h3>Payment confirmed</h3>
+          <p>Transaction ID: <code id="rc-txid">—</code></p>
+          <p><a id="rc-explorer" href="#" target="_blank" rel="noopener">Verify on the block explorer</a></p>
+          <button id="btn-receipt-copy" class="btn" type="button">Copy txid</button>
+        </div>
+      </section>
+
+      <section class="card" id="feed-card">
+        <div class="row between">
+          <h2>Latest payments</h2>
+          <button id="btn-refresh-feed" class="btn small" type="button">Refresh</button>
+        </div>
+        <p class="muted">Incoming payments to <code id="feed-addr">…</code> on <span id="feed-net">testnet</span>, read live from Electrum.</p>
+        <ul id="feed-list" class="feed"></ul>
+        <p id="feed-empty" class="muted">No payments yet — be the first to pay the link above.</p>
+        <p id="feed-error" class="error hidden"></p>
+      </section>
+
+      <section class="card">
+        <h2>How it works</h2>
+        <ul class="plain">
+          <li><b>mainnet-js v3</b> — BCH wallet, transaction building, Electrum reads (balances, UTXOs, history). Same code path for testnet and mainnet; only the network flips.</li>
+          <li><b>WizardConnect</b> — QR handshake over an encrypted Nostr relay; the wallet shares its xpub, BlazePay derives the address and asks the wallet to sign (<code>sign_transaction_request</code>). Keys never leave the wallet.</li>
+          <li><b>No backend, no custody</b> — a static page. Payment links are just URLs (<code>#/pay?to=…&amp;amt=…&amp;memo=…</code>). The memo rides on-chain as OP_RETURN.</li>
+          <li><b>CashTokens</b> — the banner address is the token-aware address of this project; EMBER2026 donations fund Community Choice voting.</li>
+        </ul>
+      </section>
+
+      <footer class="footer">
+        <p>BlazePay — built for <a href="https://dorahacks.io/hackathon/bchblaze2026/detail" target="_blank" rel="noopener">BCH Blaze 2026</a>, Mainnet Track. Open source: <a href="https://github.com/slowwwkiss/blazepay" target="_blank" rel="noopener">github.com/slowwwkiss/blazepay</a>.</p>
+      </footer>
+    </main>
+  </div>
+  <noscript><p style="padding:1rem">BlazePay needs JavaScript enabled.</p></noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
