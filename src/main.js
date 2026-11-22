@@ -22,6 +22,7 @@ const SATS_PER_BCH = 100_000_000n;
 const TESTNET_WALLET_KEY = 'blazepay-testnet-walletid';
 const FAUCET_URL = 'https://rest-unstable.mainnet.cash/faucet/get_testnet_bch';
 const DUST_SATS = 1000n; // minimum payment size we accept
+const SCAN_COUNT = 20; // receive + change addresses scanned per connected wallet
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -47,7 +48,7 @@ const els = {
 };
 
 const state = {
-  network: 'testnet', // 'testnet' | 'mainnet'
+  network: 'mainnet', // 'testnet' | 'mainnet'
   pay: null,          // { to, amtBch, memo, net }
   testnetWallet: null,
   testnetWalletId: localStorage.getItem(TESTNET_WALLET_KEY) || null,
@@ -55,6 +56,8 @@ const state = {
   wcRelay: null,
   wcAddress: null,
   wcWatch: null,
+  wcScanned: [], // [{address, kind: 'receive'|'change', index}] — all wallet addresses we scan
+  wcWatches: [], // [{address, kind, index, watch}] — watch-only wallets for the scanned addresses
 };
 
 function explorerTxUrl(network, txid) {
@@ -252,6 +255,7 @@ function wcReset(keepQr = false) {
   if (state.wcRelay) { try { state.wcRelay.cleanup(); } catch { /* ignore */ } }
   state.wcRelay = null; state.wcManager = null;
   state.wcAddress = null; state.wcWatch = null;
+  state.wcScanned = []; state.wcWatches = [];
   els.wcQr.classList.add('hidden');
   els.wcConnected.classList.add('hidden');
   els.wcStart.classList.remove('hidden');
@@ -276,11 +280,24 @@ async function wcConnect() {
       try {
         els.wcWalletName.textContent = msg.wallet_name || 'BCH wallet';
         const paths = mgr.getSessionPaths();
-        const receive = paths.find((x) => x.name === 'receive');
+        const byName = (names) => paths.find((x) => names.includes(String(x.name).toLowerCase()));
+        const receive = byName(['receive', 'external']);
         if (!receive) throw new Error('Wallet did not share a receive xpub.');
-        const [addr] = getAddrsByXpubKey(receive.xpub, '0/0', 1);
-        state.wcAddress = addr;
-        els.wcAddr.textContent = addr;
+        const change = byName(['change', 'internal']);
+        // Scan the first 20 receive + 20 change addresses: wallets like
+        // Paytaca/Selene spread funds across many addresses, so the balance
+        // of the first address alone can read 0 while the wallet holds funds.
+        const scanned = [];
+        for (const [kind, entry] of [['receive', receive], ['change', change]]) {
+          if (!entry) continue;
+          const addrs = getAddrsByXpubKey(entry.xpub, '0/0', SCAN_COUNT);
+          addrs.forEach((address, index) => scanned.push({ address, kind, index }));
+        }
+        if (scanned.length === 0) throw new Error('Could not derive any wallet address.');
+        state.wcScanned = scanned;
+        state.wcWatches = [];
+        state.wcAddress = scanned[0].address; // first receive address = primary
+        els.wcAddr.textContent = state.wcAddress;
         els.wcQr.classList.add('hidden');
         els.wcConnected.classList.remove('hidden');
         await refreshWcBalance();
@@ -309,10 +326,28 @@ async function refreshWcPanel() {
 }
 async function refreshWcBalance() {
   if (!state.wcAddress) return 0n;
-  const watch = await WatchWallet.watchOnly(state.wcAddress);
-  state.wcWatch = watch;
-  const bal = await watch.getBalance();
-  els.wcBalance.textContent = `${fmtBch(bal)} BCH (${bal.toString()} sat)`;
+  // Aggregate the balance across every scanned address. Each address is
+  // queried on its own; one failing lookup counts as 0 instead of failing
+  // the whole balance, so a single bad Electrum answer never hides funds.
+  const addrs = state.wcScanned.length
+    ? state.wcScanned
+    : [{ address: state.wcAddress, kind: 'receive', index: 0 }];
+  const settled = await Promise.all(addrs.map(async (entry) => {
+    try {
+      const watch = await WatchWallet.watchOnly(entry.address);
+      const bal = await watch.getBalance();
+      return { entry, watch, bal };
+    } catch { return { entry, watch: null, bal: 0n }; }
+  }));
+  state.wcWatches = settled
+    .filter((s) => s.watch)
+    .map((s) => ({ address: s.entry.address, kind: s.entry.kind, index: s.entry.index, watch: s.watch }));
+  const bal = settled.reduce((sum, s) => sum + s.bal, 0n);
+  const funded = settled.filter((s) => s.bal > 0n).length;
+  els.wcBalance.textContent = `${fmtBch(bal)} BCH (${bal.toString()} sat) — ${addrs.length} addresses scanned${funded ? `, ${funded} holding funds` : ''}`;
+  // Prefer the primary (first receive) watch for building transactions.
+  state.wcWatch = state.wcWatches.find((w) => w.address === state.wcAddress)?.watch
+    || state.wcWatches[0]?.watch || null;
   return bal;
 }
 async function payWithMainnet() {
@@ -322,24 +357,40 @@ async function payWithMainnet() {
   els.btnPayMainnet.disabled = true;
   try {
     const sats = bchToSats(p.amtBch);
-    const watch = state.wcWatch || await WatchWallet.watchOnly(state.wcAddress);
-    const utxos = await watch.getUtxos();
-    const bal = await watch.getBalance();
+    // Collect UTXOs from every scanned address (receive 0..19 + change
+    // 0..19), each tagged with the derivation path its funds live on.
+    // Token UTXOs are skipped — spending one as plain BCH would burn it.
+    const byAddr = new Map(state.wcScanned.map((e) => [e.address, e]));
+    const watches = state.wcWatches.length
+      ? state.wcWatches
+      : [{ address: state.wcAddress, kind: 'receive', index: 0, watch: state.wcWatch || await WatchWallet.watchOnly(state.wcAddress) }];
+    const utxos = [];
+    for (const w of watches) {
+      try {
+        for (const u of await w.watch.getUtxos()) {
+          if (u.token) continue;
+          const src = byAddr.get(u.address) || { kind: w.kind, index: w.index };
+          utxos.push({ ...u, _kind: src.kind, _index: src.index });
+        }
+      } catch { /* one address failing must not block the payment */ }
+    }
+    const bal = utxos.reduce((sum, u) => sum + (u.satoshis ?? 0n), 0n);
     if (utxos.length === 0 || bal < sats + 1000n) {
-      showStatus(`Not enough BCH at the connected address (balance ${fmtBch(bal)}). The payment uses the wallet's first receive address — fund it first, or use an address that holds funds.`, 'error');
+      showStatus(`Not enough BCH in the connected wallet (scanned balance ${fmtBch(bal)} across ${state.wcScanned.length || 1} addresses). Fund any receive address of this wallet first.`, 'error');
       return;
     }
     showStatus('Building the unsigned transaction…');
     const reqs = [{ cashaddr: p.to, value: sats }];
     if (p.memo) reqs.push(OpReturnData.from(p.memo.slice(0, 180)));
-    // All inputs come from the wallet's first receive address (index 0), so
-    // every input path is ["receive", 0] for the sign request.
-    const built = await watch.send(reqs, {
+    const buildWatch = watches.find((w) => w.address === state.wcAddress)?.watch || watches[0].watch;
+    const built = await buildWatch.send(reqs, {
       buildUnsigned: true,
-      utxoIds: utxos,
+      utxoIds: utxos.map(({ _kind, _index, ...u }) => u),
       changeAddress: state.wcAddress,
     });
-    const inputPaths = utxos.map((_, i) => [i, 'receive', 0]);
+    // Each input is signed at the derivation path of the address its UTXO
+    // came from — [input index, 'receive'|'change', address index].
+    const inputPaths = utxos.map((u, i) => [i, u._kind, u._index]);
     showStatus('Waiting for your signature in the wallet…');
     const signed = await state.wcManager.signTransaction({
       transaction: {
@@ -445,6 +496,6 @@ window.addEventListener('hashchange', () => {
   if (state.pay) state.network = state.pay.net;
   setNetwork(state.network);
   renderPayCard();
-  if (!state.pay) ensureTestnetWallet().catch(() => { /* shown in panel */ });
+  if (!state.pay && state.network === 'testnet') ensureTestnetWallet().catch(() => { /* shown in panel */ });
   setInterval(() => { if (!document.hidden) refreshFeed(); }, 30000);
 })();

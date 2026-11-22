@@ -36,18 +36,18 @@
           <li><b>2.</b> Open the link — connect your BCH wallet and pay.</li>
           <li><b>3.</b> Done — the payment shows up below, verified on-chain.</li>
         </ol>
-        <p class="hint">Judges: start on <b>Testnet</b> (free play money, one click) — then flip to <b>Mainnet</b> and pay for real with your own wallet via WizardConnect.</p>
+        <p class="hint">Judges: start on <b>Mainnet</b> (real BCH — connect your wallet via WizardConnect) — or try free on <b>Testnet</b> first (no wallet needed, one click, faucet funds you).</p>
       </section>
 
       <section class="card">
         <div class="row between">
           <h2>Network</h2>
           <div class="toggle" role="group" aria-label="Network">
-            <button id="net-testnet" class="toggle-btn active" type="button">Testnet (free)</button>
-            <button id="net-mainnet" class="toggle-btn" type="button">Mainnet (real BCH)</button>
+            <button id="net-testnet" class="toggle-btn" type="button">Testnet (free)</button>
+            <button id="net-mainnet" class="toggle-btn active" type="button">Mainnet (real BCH)</button>
           </div>
         </div>
-        <p class="muted" id="net-note">Testnet: the app creates a throwaway test wallet in your browser and funds it free from the faucet. Nothing real moves.</p>
+        <p class="muted" id="net-note">Mainnet: real BCH, your own wallet, your own money. Connect with WizardConnect (Paytaca / Selene / Cashonize) and sign in your wallet.</p>
       </section>
 
       <section class="card" id="create-card">
@@ -144,7 +144,7 @@
         <h2>How it works</h2>
         <ul class="plain">
           <li><b>mainnet-js v3</b> — BCH wallet, transaction building, Electrum reads (balances, UTXOs, history). Same code path for testnet and mainnet; only the network flips.</li>
-          <li><b>WizardConnect</b> — QR handshake over an encrypted Nostr relay; the wallet shares its xpub, BlazePay derives the address and asks the wallet to sign (<code>sign_transaction_request</code>). Keys never leave the wallet.</li>
+          <li><b>WizardConnect</b> — QR handshake over an encrypted Nostr relay; the wallet shares its xpubs, BlazePay derives your receive and change addresses (first 20 of each) and scans them all for funds, then asks the wallet to sign (<code>sign_transaction_request</code>). Keys never leave the wallet.</li>
           <li><b>No backend, no custody</b> — a static page. Payment links are just URLs (<code>#/pay?to=…&amp;amt=…&amp;memo=…</code>). The memo rides on-chain as OP_RETURN.</li>
           <li><b>CashTokens</b> — the banner address is the token-aware address of this project; EMBER2026 donations fund Community Choice voting.</li>
         </ul>
