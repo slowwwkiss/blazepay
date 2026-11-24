@@ -460,7 +460,7 @@ async function payWithMainnet() {
     await ensureElectrum('mainnet');
     const provider = getNetworkProvider('mainnet');
     const txid = await provider.sendRawTransaction(signed.signedTransaction);
-    showStatus('Paid! Transaction confirmed by the network — receipt below.', 'ok');
+    showStatus('Paid! Transaction broadcast — receipt below. Track confirmation on the explorer.', 'ok');
     showReceipt(txid);
     await refreshWcBalance();
     setTimeout(refreshFeed, 4000);
