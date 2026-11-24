@@ -9,6 +9,7 @@ import {
   getNetworkProvider,
   WatchWallet,
   getAddrsByXpubKey,
+  DefaultProvider,
 } from 'mainnet-js';
 import { initiateDappRelay } from '@wizardconnect/core';
 import { DappConnectionManager } from '@wizardconnect/dapp';
@@ -23,6 +24,57 @@ const TESTNET_WALLET_KEY = 'blazepay-testnet-walletid';
 const FAUCET_URL = 'https://rest-unstable.mainnet.cash/faucet/get_testnet_bch';
 const DUST_SATS = 1000n; // minimum payment size we accept
 const SCAN_COUNT = 20; // receive + change addresses scanned per connected wallet
+
+// ---------------------------------------------------------------- Electrum failover
+// mainnet-js only ever connects to servers[0] of its built-in list, so a
+// single dead host kills every Electrum call (feed, balances, faucet wait,
+// broadcast). The built-ins are one host per network:
+//   mainnet: wss://blackie.c3-soft.com:50004
+//   testnet (chipnet): wss://chipnet.imaginary.cash:50004
+// All candidates below were verified live (server.version answers, Fulcrum
+// 2.1.x, protocol 1.5) on 24 Nov 2026. Before the first real call on a
+// network, probe the candidates in order with a cheap connect and pin the
+// first host that answers via DefaultProvider, so one dead server can't take
+// the demo down during judging. If every candidate fails, the built-in
+// defaults stay in place and the normal error surfaces — no behaviour change.
+const ELECTRUM_CANDIDATES = {
+  mainnet: [
+    'wss://blackie.c3-soft.com:50004',
+    'wss://bch.imaginary.cash:50004',
+    'wss://electrum.imaginary.cash:50004',
+  ],
+  testnet: [
+    'wss://chipnet.imaginary.cash:50004',
+    'wss://chipnet.bch.ninja:50004',
+  ],
+};
+// NOTE — upstream quirk (verified 24 Nov 2026): mainnet-js 3.0.1 calls
+// ElectrumWebSocket(host, port, encrypted, timeout) positionally, but the
+// installed @electrum-cash/web-socket 4.2.0 takes (host, options-object), so
+// the port and encryption flag are silently dropped and the socket ALWAYS
+// dials wss://host:50004. Consequence: only :50004 wss hosts are usable — a
+// :64004 or :443 URL would silently connect to :50004 on the same host
+// (wrong network!). All candidates above are :50004 wss for that reason.
+const electrumReady = {};
+function ensureElectrum(network) {
+  if (!electrumReady[network]) electrumReady[network] = pinElectrum(network);
+  return electrumReady[network];
+}
+async function pinElectrum(network) {
+  for (const url of ELECTRUM_CANDIDATES[network]) {
+    try {
+      const probe = getNetworkProvider(network, [url]);
+      await Promise.race([
+        probe.ready(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 5000)),
+      ]);
+      DefaultProvider.servers[network] = [url, ...ELECTRUM_CANDIDATES[network].filter((u) => u !== url)];
+      try { await probe.disconnect(); } catch { /* probe socket already closed */ }
+      return;
+    } catch { /* try the next candidate */ }
+  }
+  // All candidates failed: leave the built-in defaults in place.
+}
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -164,6 +216,7 @@ async function ensureTestnetWallet() {
   els.twAddr.textContent = 'creating…';
   els.twBalance.textContent = '…';
   try {
+    await ensureElectrum('testnet');
     let w;
     if (state.testnetWalletId) {
       try { w = await walletFromId(state.testnetWalletId); }
@@ -326,6 +379,7 @@ async function refreshWcPanel() {
 }
 async function refreshWcBalance() {
   if (!state.wcAddress) return 0n;
+  await ensureElectrum('mainnet');
   // Aggregate the balance across every scanned address. Each address is
   // queried on its own; one failing lookup counts as 0 instead of failing
   // the whole balance, so a single bad Electrum answer never hides funds.
@@ -403,6 +457,7 @@ async function payWithMainnet() {
     });
     if (signed.error) throw new Error(signed.error);
     showStatus('Signed! Broadcasting…');
+    await ensureElectrum('mainnet');
     const provider = getNetworkProvider('mainnet');
     const txid = await provider.sendRawTransaction(signed.signedTransaction);
     showStatus('Paid! Transaction confirmed by the network — receipt below.', 'ok');
@@ -424,6 +479,7 @@ async function refreshFeed() {
   els.feedNet.textContent = net;
   els.feedError.classList.add('hidden');
   try {
+    await ensureElectrum(net);
     const provider = getNetworkProvider(net);
     const items = await getHistory({ addresses: [feedAddr], provider, count: 10 });
     const incoming = (items || []).filter((it) => it.valueChange > 0);
@@ -494,6 +550,7 @@ window.addEventListener('hashchange', () => {
   $('link-repo').href = REPO_URL;
   state.pay = parsePayHash();
   if (state.pay) state.network = state.pay.net;
+  ensureElectrum(state.network); // warm the Electrum probe; first-use sites await it
   setNetwork(state.network);
   renderPayCard();
   if (!state.pay && state.network === 'testnet') ensureTestnetWallet().catch(() => { /* shown in panel */ });
